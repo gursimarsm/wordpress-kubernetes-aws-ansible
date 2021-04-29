@@ -1,0 +1,4 @@
+---
+# vars file for master
+cidr_range: 10.244.0.0/16 
+

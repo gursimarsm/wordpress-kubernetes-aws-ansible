@@ -1,0 +1,115 @@
+---
+# tasks file for master
+      - name: Adding Kubeadm repo
+        copy:
+            src: kubernetes.repo
+            dest: /etc/yum.repos.d
+        
+      - name: installing docker
+        package:
+                  name: "docker"
+                  state: present
+     
+      - name: installing kubeadm
+        package:
+                    name: "kubeadm"
+                    state: present
+        
+
+      - name: Enabling docker service      
+        service: 
+             name: docker
+             state: started
+             enabled: yes
+
+
+      - name: Pulling all kubeadm config image
+        command: kubeadm config images pull
+        ignore_errors: no
+
+      - name: Changing driver cgroup to systemd
+        copy:
+           src: daemon.json
+           dest: /etc/docker/daemon.json
+  
+      - name: Removing swapfile from /etc/fstab
+        mount:
+                name: "{{ item }}"
+                fstype: swap
+                state: absent
+        with_items:
+                - swap
+                - none
+
+      - name: Enabling kubelet service
+        service:
+            name: kubelet
+            daemon_reload: yes
+            state: started
+            enabled: yes
+      
+      - name: Restarting docker service
+        service: 
+              name: docker
+              state: "restarted" 
+       
+
+      - name: Installing iproute-tc
+        package: 
+           name: iproute-tc
+           state: present        
+           update_cache: yes
+
+      - name: Initializing the kubeadm
+        shell: "kubeadm init --pod-network-cidr=10.244.0.0/16 --ignore-preflight-errors=Swap --ignore-preflight-errors=NumCPU --ignore-preflight-errors=Mem --node-name=master"
+        register: kubeadm
+        ignore_errors: yes
+
+      - debug:
+           msg: "{{ kubeadm }}" 
+
+      - name: Setup kubeconfig for home user
+        shell: "{{ item }}"
+        async: 2
+        poll: 0
+        with_items:
+             - "mkdir -p $HOME/.kube"
+             - "cp -i /etc/kubernetes/admin.conf $HOME/.kube/config"
+             - "chown $(id -u):$(id -g) $HOME/.kube/config"
+
+      - name: Adding flannel network
+        shell: kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
+
+      - name: Joining token
+        shell: "kubeadm token create --print-join-command"
+        register: token
+
+      - debug:
+              msg: "{{ token }}" 
+        ignore_errors: yes
+        
+      - name: Storing token into a file dest at /root/token.sh 
+        local_action: copy content={{ token.stdout_lines[0] }} dest=/root/token.sh
+        
+      - name: Copying mysql-database.yml file
+        copy:
+              src: database.yaml
+              dest: /root
+       
+      - name: Copying wordpress.yml file
+        copy:
+               src: wordpress.yml
+               dest: /root
+
+      - shell: "kubectl apply -f /root/database.yaml"
+        register: mysql
+
+      - shell: "kubectl apply -f /root/wordpress.yml"
+        register: wordpress
+
+      - debug:
+           msg: "{{ mysql }}"
+
+       - debug:
+            msg: "{{ wordpress }}"   
+
