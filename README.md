@@ -1,6 +1,4 @@
-# Task 23
-
-## Automating WordPress Application with MySQL Database on Kubernetes over AWS using Ansible
+# Automating WordPress Application with MySQL Database on Kubernetes over AWS using Ansible
 
 Task Description: <br>
 📌 Automate Kubernetes Cluster Using Ansible. <br>
